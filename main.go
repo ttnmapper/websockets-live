@@ -18,6 +18,10 @@ type Configuration struct {
 	AmqpPort     string `env:"AMQP_PORT"`
 	AmqpUser     string `env:"AMQP_USER"`
 	AmqpPassword string `env:"AMQP_PASSWORD"`
+
+	UseTls   bool   `env:"USE_TLS"`
+	CertPath string `env:"CERT_PATH"`
+	KeyPath  string `env:"KEY_PATH"`
 }
 
 var myConfiguration = Configuration{
@@ -25,6 +29,11 @@ var myConfiguration = Configuration{
 	AmqpPort:     "5672",
 	AmqpUser:     "guest",
 	AmqpPassword: "guest",
+
+	UseTls: false,
+
+	CertPath: "cert.pem",
+	KeyPath:  "key.pem",
 }
 
 var addr = flag.String("addr", ":8081", "http service address")
@@ -49,7 +58,11 @@ func main() {
 		log.Println("Route hit")
 		serveExperiment(hub, w, r)
 	})
-	err = http.ListenAndServe(*addr, nil)
+	if myConfiguration.UseTls {
+		err = http.ListenAndServeTLS(*addr, myConfiguration.CertPath, myConfiguration.KeyPath, nil)
+	} else {
+		err = http.ListenAndServe(*addr, nil)
+	}
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
