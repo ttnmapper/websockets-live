@@ -8,6 +8,7 @@ import (
 	"github.com/tkanos/gonfig"
 	"log"
 	"net/http"
+	"os"
 	"ttnmapper-websockets-live/types"
 )
 
@@ -36,7 +37,11 @@ var myConfiguration = Configuration{
 	KeyPath:  "key.pem",
 }
 
-var addr = flag.String("addr", ":8081", "http service address")
+var (
+	addr         = flag.String("addr", ":8081", "http service address")
+	certFilename = "cert.pem"
+	keyFilename  = "key.pem"
+)
 
 func main() {
 
@@ -46,6 +51,17 @@ func main() {
 	}
 
 	log.Printf("[Configuration]\n%s\n", prettyPrint(myConfiguration)) // output: [UserA, UserB]
+
+	certFilename = myConfiguration.CertPath
+	keyFilename = myConfiguration.KeyPath
+
+	log.Println(certFilename)
+	log.Println(keyFilename)
+
+	_, err = os.Open("/le-ssl")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	go subscribeToRabbit()
 
@@ -59,7 +75,7 @@ func main() {
 		serveExperiment(hub, w, r)
 	})
 	if myConfiguration.UseTls {
-		err = http.ListenAndServeTLS(*addr, myConfiguration.CertPath, myConfiguration.KeyPath, nil)
+		err = http.ListenAndServeTLS(*addr, certFilename, keyFilename, nil)
 	} else {
 		err = http.ListenAndServe(*addr, nil)
 	}
