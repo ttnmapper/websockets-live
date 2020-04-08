@@ -15,6 +15,6 @@ FROM scratch
 WORKDIR /root/
 
 COPY --from=builder /go-modules/app .
-COPY conf.json .
+#COPY conf.json .
 
 CMD ["./app"]
