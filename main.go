@@ -1,0 +1,154 @@
+// Copyright 2013 The Gorilla WebSocket Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package main
+
+import (
+	"encoding/json"
+	"flag"
+	"fmt"
+	"github.com/streadway/amqp"
+	"github.com/tkanos/gonfig"
+	"log"
+	"net/http"
+	"ttnmapper-websockets-live/types"
+)
+
+var messageChannel = make(chan types.TtnMapperUplinkMessage)
+
+type Configuration struct {
+	AmqpHost     string `env:"AMQP_HOST"`
+	AmqpPort     string `env:"AMQP_PORT"`
+	AmqpUser     string `env:"AMQP_USER"`
+	AmqpPassword string `env:"AMQP_PASSWORD"`
+}
+
+var myConfiguration = Configuration{
+	AmqpHost:     "localhost",
+	AmqpPort:     "5672",
+	AmqpUser:     "user",
+	AmqpPassword: "password",
+}
+
+var addr = flag.String("addr", ":8081", "http service address")
+
+func serveHome(w http.ResponseWriter, r *http.Request) {
+	log.Println(r.URL)
+	fmt.Fprintf(w, "Hello World!")
+}
+
+func main() {
+
+	err := gonfig.GetConf("conf.json", &myConfiguration)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	log.Printf("[Configuration]\n%s\n", prettyPrint(myConfiguration)) // output: [UserA, UserB]
+
+	go subscribeToRabbit()
+
+	flag.Parse()
+	hub := newHub()
+	go hub.run()
+
+	http.HandleFunc("/", serveHome)
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Route hit")
+		serveExperiment(hub, w, r)
+	})
+	err = http.ListenAndServe(*addr, nil)
+	if err != nil {
+		log.Fatal("ListenAndServe: ", err)
+	}
+}
+
+func subscribeToRabbit() {
+	conn, err := amqp.Dial("amqp://" + myConfiguration.AmqpUser + ":" + myConfiguration.AmqpPassword + "@" + myConfiguration.AmqpHost + ":" + myConfiguration.AmqpPort + "/")
+	failOnError(err, "Failed to connect to RabbitMQ")
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	failOnError(err, "Failed to open a channel")
+	defer ch.Close()
+
+	err = ch.ExchangeDeclare(
+		"new_packets", // name
+		"fanout",      // type
+		true,          // durable
+		false,         // auto-deleted
+		false,         // internal
+		false,         // no-wait
+		nil,           // arguments
+	)
+	failOnError(err, "Failed to declare an exchange")
+
+	q, err := ch.QueueDeclare(
+		"websockets-live-data", // name
+		false,                  // durable
+		false,                  // delete when usused
+		false,                  // exclusive
+		false,                  // no-wait
+		nil,                    // arguments
+	)
+	failOnError(err, "Failed to declare a queue")
+
+	err = ch.Qos(
+		10,    // prefetch count
+		0,     // prefetch size
+		false, // global
+	)
+	failOnError(err, "Failed to set queue QoS")
+
+	err = ch.QueueBind(
+		q.Name,        // queue name
+		"",            // routing key
+		"new_packets", // exchange
+		false,
+		nil)
+	failOnError(err, "Failed to bind a queue")
+
+	msgs, err := ch.Consume(
+		q.Name, // queue
+		"",     // consumer
+		true,   // auto-ack
+		false,  // exclusive
+		false,  // no-local
+		false,  // no-wait
+		nil,    // args
+	)
+	failOnError(err, "Failed to register a consumer")
+
+	forever := make(chan bool)
+
+	go func() {
+		for d := range msgs {
+			log.Print(" [a] Packet received")
+
+			//log.Printf(" [a] %s", d.Body)
+			var message types.TtnMapperUplinkMessage
+			if err := json.Unmarshal(d.Body, &message); err != nil {
+				log.Print(" [a] " + err.Error())
+				continue
+			}
+
+			messageChannel <- message
+		}
+	}()
+
+	log.Printf(" [a] Waiting for packets. To exit press CTRL+C")
+	<-forever
+
+}
+
+func failOnError(err error, msg string) {
+	if err != nil {
+		log.Fatalf("%s: %s", msg, err)
+	}
+}
+
+func prettyPrint(i interface{}) string {
+	s, _ := json.MarshalIndent(i, "", "\t")
+	return string(s)
+}
