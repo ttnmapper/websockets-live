@@ -1,7 +1,3 @@
-// Copyright 2013 The Gorilla WebSocket Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package main
 
 import (
@@ -27,16 +23,11 @@ type Configuration struct {
 var myConfiguration = Configuration{
 	AmqpHost:     "localhost",
 	AmqpPort:     "5672",
-	AmqpUser:     "user",
-	AmqpPassword: "password",
+	AmqpUser:     "guest",
+	AmqpPassword: "guest",
 }
 
 var addr = flag.String("addr", ":8081", "http service address")
-
-func serveHome(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL)
-	fmt.Fprintf(w, "Hello World!")
-}
 
 func main() {
 
@@ -62,6 +53,11 @@ func main() {
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
+}
+
+func serveHome(w http.ResponseWriter, r *http.Request) {
+	log.Println(r.URL)
+	fmt.Fprintf(w, "Hello World!")
 }
 
 func subscribeToRabbit() {
