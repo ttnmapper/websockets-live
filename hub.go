@@ -44,6 +44,11 @@ func (h *Hub) run() {
 		case message := <-messageChannel:
 			for client := range h.clients {
 
+				if client.applicationId == "" && client.deviceId == "" && client.userId == "" && client.experiment == "" {
+					// Need to have at least one filter
+					continue
+				}
+
 				if client.applicationId != "" {
 					if message.AppID != client.applicationId {
 						continue
