@@ -8,7 +8,6 @@ import (
 	"github.com/tkanos/gonfig"
 	"log"
 	"net/http"
-	"os"
 	"ttnmapper-websockets-live/types"
 )
 
@@ -22,9 +21,7 @@ type Configuration struct {
 	AmqpExchange string `env:"AMQP_EXHANGE"`
 	AmqpQueue    string `env:"AMQP_QUEUE"`
 
-	UseTls   bool   `env:"USE_TLS"`
-	CertPath string `env:"CERT_PATH"`
-	KeyPath  string `env:"KEY_PATH"`
+	HttpListenAddress string `env:"HTTP_LISTEN_ADDRESS"`
 }
 
 var myConfiguration = Configuration{
@@ -35,17 +32,8 @@ var myConfiguration = Configuration{
 	AmqpExchange: "new_packets",
 	AmqpQueue:    "websockets-live-data",
 
-	UseTls: false,
-
-	CertPath: "cert.pem",
-	KeyPath:  "key.pem",
+	HttpListenAddress: ":8080",
 }
-
-var (
-	addr         = flag.String("addr", ":8081", "http service address")
-	certFilename = "cert.pem"
-	keyFilename  = "key.pem"
-)
 
 func main() {
 
@@ -55,17 +43,6 @@ func main() {
 	}
 
 	log.Printf("[Configuration]\n%s\n", prettyPrint(myConfiguration)) // output: [UserA, UserB]
-
-	certFilename = myConfiguration.CertPath
-	keyFilename = myConfiguration.KeyPath
-
-	log.Println(certFilename)
-	log.Println(keyFilename)
-
-	_, err = os.Open("/le-ssl")
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	go subscribeToRabbit()
 
@@ -78,11 +55,8 @@ func main() {
 		log.Println("Route hit")
 		serveExperiment(hub, w, r)
 	})
-	if myConfiguration.UseTls {
-		err = http.ListenAndServeTLS(*addr, certFilename, keyFilename, nil)
-	} else {
-		err = http.ListenAndServe(*addr, nil)
-	}
+
+	err = http.ListenAndServe(myConfiguration.HttpListenAddress, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
@@ -90,7 +64,7 @@ func main() {
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL)
-	fmt.Fprintf(w, "Hello World!")
+	fmt.Fprintf(w, "TTN Mapper Websocket server")
 }
 
 func subscribeToRabbit() {
